@@ -1,0 +1,45 @@
+{# master/templates/_formhelpers.html - Renders WTForms fields with Bootstrap 5 classes #}
+{% macro render_field(field, label_visible=true, **kwargs) %}
+  {% set field_class = kwargs.pop('class', '') %}
+  {% set is_checkbox = field.type == 'BooleanField' %}
+  {% set is_hidden = field.type == 'HiddenField' %}
+
+  {% if is_hidden %}
+    {{ field(**kwargs) }}
+  {% elif is_checkbox %}
+    <div class="form-check mb-3">
+      {{ field(class="form-check-input " + field_class, **kwargs) }}
+      {% if label_visible %}
+        {{ field.label(class="form-check-label") }}
+      {% endif %}
+       {% if field.errors %}
+        <div class="invalid-feedback d-block">
+          {% for error in field.errors %}<span>{{ error }}</span>{% endfor %}
+        </div>
+      {% endif %}
+       {% if field.description %}
+           <div class="form-text">{{ field.description | safe }}</div>
+       {% endif %}
+    </div>
+  {% else %}
+    <div class="mb-3">
+      {% if label_visible %}
+        {{ field.label(class="form-label") }}
+      {% endif %}
+      {{ field(class="form-control " + field_class + (' is-invalid' if field.errors else ''), **kwargs) }}
+      {% if field.errors %}
+        <div class="invalid-feedback">
+          {% for error in field.errors %}<span>{{ error }}</span>{% endfor %}
+        </div>
+      {% endif %}
+       {% if field.description %}
+           <div class="form-text">{{ field.description | safe }}</div>
+       {% endif %}
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{# Example for rendering a submit button #}
+{% macro render_submit_field(field, **kwargs) %}
+    {{ field(class="btn " + kwargs.get('class', 'btn-primary'), **kwargs) }}
+{% endmacro %}
