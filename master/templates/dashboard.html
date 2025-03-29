@@ -1,0 +1,170 @@
+{% extends "layout.html" %}
+{# Import human_readable_size filter if defined in main_routes.py or globally #}
+
+{% block title %}仪表盘 - Simbak{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">仪表盘概览</h1>
+
+{# Stats Cards Section #}
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4 mb-4">
+    {# Total Clients Card #}
+    <div class="col">
+        <div class="card text-center h-100 shadow-sm border-primary">
+            <div class="card-body">
+                 <div class="fs-1 text-primary"><i class="fas fa-server"></i></div>
+                <h5 class="card-title mt-2">客户端总数</h5>
+                <p class="card-text fs-2 fw-bold">{{ stats.total_clients }}</p>
+            </div>
+        </div>
+    </div>
+    {# Online Clients Card #}
+    <div class="col">
+        <div class="card text-center h-100 shadow-sm border-success">
+             <div class="card-body">
+                 <div class="fs-1 text-success"><i class="fas fa-wifi"></i></div>
+                <h5 class="card-title mt-2">在线客户端</h5>
+                <p class="card-text fs-2 fw-bold">{{ stats.online_clients }}</p>
+            </div>
+        </div>
+    </div>
+    {# Offline Clients Card #}
+    <div class="col">
+        <div class="card text-center h-100 shadow-sm border-danger">
+            <div class="card-body">
+                 <div class="fs-1 text-danger"><i class="fas fa-power-off"></i></div>
+                <h5 class="card-title mt-2">离线客户端</h5>
+                <p class="card-text fs-2 fw-bold">{{ stats.offline_clients }}</p>
+             </div>
+        </div>
+    </div>
+     {# Total Backup Size Card - Note: Calculation needs implementation #}
+     <div class="col">
+        <div class="card text-center h-100 shadow-sm border-info">
+            <div class="card-body">
+                 <div class="fs-1 text-info"><i class="fas fa-hdd"></i></div>
+                <h5 class="card-title mt-2">备份总大小</h5>
+                {# Use the filter here #}
+                <p class="card-text fs-4 fw-bold">{{ stats.total_backup_size | human_readable_size }}</p>
+                <small class="text-muted">(估算值)</small> {# Indicate if it's an estimate #}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Recent Activity and Client Status Section #}
+<div class="row">
+    {# Recent Backup Logs Column #}
+    <div class="col-lg-7 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <i class="fas fa-history"></i> 最近备份活动 (最新 {{ recent_logs|length }})
+            </div>
+            <div class="card-body scrollable-card-body" style="max-height: 450px; overflow-y: auto;">
+                {% if recent_logs %}
+                <ul class="list-group list-group-flush">
+                    {% for log in recent_logs %}
+                    <li class="list-group-item d-flex justify-content-between align-items-start log-entry"
+                        data-log-id="{{ log.id }}" title="点击查看详情">
+                        <div class="ms-2 me-auto">
+                             <div class="fw-bold">
+                                {% if log.client %}<a href="{{ url_for('main.client_detail', client_id=log.client.id) }}" class="text-decoration-none">{{ log.client.name }}</a>{% endif %}
+                                {% if log.job %}<small class="text-muted"> - {{ log.job.name }}</small>{% else %}<small class="text-muted"> - 系统</small>{% endif %}
+                            </div>
+                            <small class="d-block text-muted" title="{{ log.message }}">{{ log.message | truncate(120) }}</small>
+                             {# Collapsible Detail Row #}
+                             <div class="log-detail-row mt-2" id="log-detail-{{ log.id }}" style="display: none;">
+                                 <div class="log-message small bg-light p-2 rounded">{{ log.message }}</div>
+                                 <div class="small text-muted mt-1">
+                                     {% if log.duration_seconds is not none %} <span>时长: {{ "%.2f"|format(log.duration_seconds) }}s</span> {% endif %}
+                                     {% if log.size_bytes is not none %} <span class="ms-2">大小: {{ log.size_bytes | human_readable_size }}</span> {% endif %}
+                                     {% if log.backup_snapshot_name %} <span class="ms-2">快照/文件: {{ log.backup_snapshot_name }}</span> {% endif %}
+                                 </div>
+                            </div>
+                        </div>
+                         {# Status Badge and Time #}
+                        <div class="text-end ms-3">
+                            {% if log.status == 'Success' %} <span class="badge bg-success rounded-pill">成功</span>
+                            {% elif log.status == 'Failed' %} <span class="badge bg-danger rounded-pill">失败</span>
+                            {% elif log.status == 'Running' %} <span class="badge bg-primary rounded-pill">运行中</span>
+                            {% elif log.status == 'Partial' %} <span class="badge bg-warning text-dark rounded-pill">部分成功</span>
+                            {% elif log.status %} <span class="badge bg-secondary rounded-pill">{{ log.status }}</span>
+                            {% endif %}
+                            <small class="d-block text-muted mt-1" title="{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') }}">{{ log.timestamp | timesince }}</small> {# Use timesince filter #}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted p-3">暂无最近备份活动记录。</p>
+                {% endif %}
+            </div>
+             <div class="card-footer text-center">
+                 <a href="{{ url_for('main.view_logs') }}">查看所有日志 <i class="fas fa-angle-right"></i></a>
+             </div>
+        </div>
+    </div>
+
+    {# Client Status Column #}
+    <div class="col-lg-5 mb-4">
+         <div class="card shadow-sm h-100">
+            <div class="card-header">
+               <i class="fas fa-broadcast-tower"></i> 客户端状态
+            </div>
+            <div class="card-body scrollable-card-body" style="max-height: 450px; overflow-y: auto;">
+                 {% if clients %}
+                 <div class="list-group list-group-flush">
+                     {% for client in clients %}
+                     <a href="{{ url_for('main.client_detail', client_id=client.id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                         <div>
+                             <strong class="mb-1">{{ client.name }}</strong>
+                             <small class="d-block text-muted">{{ client.hostname or 'N/A' }}</small>
+                         </div>
+                         <div>
+                            {% if client.status == ClientStatus.ONLINE %}
+                                <span class="badge status-badge status-online" title="最后心跳: {{ client.last_heartbeat | timesince if client.last_heartbeat else '从未' }}">在线</span>
+                            {% elif client.status == ClientStatus.OFFLINE %}
+                                <span class="badge status-badge status-offline" title="最后心跳: {{ client.last_heartbeat | timesince if client.last_heartbeat else '从未' }}">离线</span>
+                            {% elif client.status == ClientStatus.ERROR %}
+                                <span class="badge status-badge status-error" title="可能发生错误">错误</span>
+                            {% else %}
+                                <span class="badge status-badge status-unknown" title="状态未知">未知</span>
+                            {% endif %}
+                        </div>
+                     </a>
+                     {% endfor %}
+                 </div>
+                 {% else %}
+                 <p class="text-muted p-3">系统中还没有任何客户端。请 <a href="{{ url_for('main.list_clients') }}">添加客户端</a>。</p>
+                 {% endif %}
+            </div>
+             <div class="card-footer text-center">
+                 <a href="{{ url_for('main.list_clients') }}">管理所有客户端 <i class="fas fa-angle-right"></i></a>
+             </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{# Add JavaScript for toggling log details, same as in logs.html/client_detail.html #}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // --- Log Detail Toggle ---
+    document.querySelectorAll('.log-entry').forEach(row => {
+        row.addEventListener('click', function(event) {
+             // Prevent toggle if clicking on a link inside the entry
+             if (event.target.tagName === 'A') {
+                 return;
+             }
+            const logId = this.getAttribute('data-log-id');
+            const detailRow = document.getElementById(`log-detail-${logId}`);
+            if (detailRow) {
+                const isHidden = detailRow.style.display === 'none' || detailRow.style.display === '';
+                detailRow.style.display = isHidden ? 'block' : 'none'; // Display as block inside list item
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
