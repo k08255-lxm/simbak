@@ -1,0 +1,15 @@
+Flask>=2.0
+Flask-SQLAlchemy>=3.0
+Flask-Login>=0.6
+Flask-WTF>=1.0
+Flask-Migrate>=4.0 # For database schema migrations
+SQLAlchemy>=1.4 # Specify if needed, usually comes with Flask-SQLAlchemy
+psycopg2-binary # If supporting PostgreSQL backup metadata (optional, needed by SQLAlchemy for PG)
+gunicorn # WSGI server
+requests # For webhooks
+croniter # For parsing cron strings
+APScheduler>=3.9 # For background tasks (retention)
+Flask-Mail>=0.9 # For email notifications
+cryptography>=3.4 # For encrypting sensitive data
+python-dotenv>=0.19 # For loading .env files during development
+bleach # For sanitizing HTML in file browser etc.
