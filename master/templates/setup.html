@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+{% from "_formhelpers.html" import render_field %}
+
+{% block title %}首次运行设置 - Simbak{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h2 class="card-title text-center mb-0">Simbak 首次运行设置</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">欢迎使用 Simbak！请完成以下设置以开始使用。</p>
+                <form method="POST" action="{{ url_for('auth.setup') }}">
+                    {{ form.csrf_token }}
+
+                    <fieldset class="mb-3">
+                        <legend class="h5">管理员账户</legend>
+                        {{ render_field(form.username, class="form-control", placeholder="设置管理员用户名") }}
+                        {{ render_field(form.password, class="form-control", placeholder="设置管理员密码 (至少8位)") }}
+                        {{ render_field(form.confirm_password, class="form-control", placeholder="确认密码") }}
+                    </fieldset>
+
+                    <fieldset class="mb-3">
+                        <legend class="h5">备份存储设置</legend>
+                        {{ render_field(form.backup_base_path, class="form-control", placeholder="例如 /mnt/backups/simbak") }}
+                         <div class="form-text">这是存储所有客户端备份的根目录。请确保此目录存在并且 Web 服务器运行用户 (或指定的备份用户) 具有写入权限。安装脚本默认创建为 `/opt/simbak/backups` 并设置 `simbak` 用户权限。</div>
+                        {{ render_field(form.backup_ssh_user, class="form-control", placeholder="用于接收备份的SSH用户名") }}
+                        <div class="form-text">这是客户端通过 SSH 连接并写入备份时使用的主控服务器上的用户名。安装脚本默认创建为 `simbak`。</div>
+                    </fieldset>
+
+                    <div class="d-grid">
+                        {{ form.submit(class="btn btn-primary btn-lg") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
