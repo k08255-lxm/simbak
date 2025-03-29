@@ -1,0 +1,105 @@
+{# master/templates/file_browser.html (Example if needed separately) #}
+{% extends "layout.html" %}
+
+{% block title %}文件浏览器 - Simbak{% endblock %}
+
+{% block head_extra %}
+<!-- jsTree CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" />
+{% endblock %}
+
+{% block content %}
+<h1>文件浏览器</h1>
+
+{# Add breadcrumbs back to client detail? #}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.list_clients') }}">客户端管理</a></li>
+        {# Assuming client object is passed #}
+        <li class="breadcrumb-item"><a href="{{ url_for('main.client_detail', client_id=client.id) }}">{{ client.name }}</a></li>
+        <li class="breadcrumb-item active" aria-current="page">文件浏览</li>
+    </ol>
+</nav>
+
+<div class="alert alert-info">
+    正在浏览客户端 <strong>{{ client.name }}</strong> 的备份任务 <strong>"{{ job.name }}"</strong> 中的快照 <strong><code>{{ snapshot }}</code></strong>。
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header">
+        文件列表
+        {# Add Download/Restore buttons here if applicable #}
+    </div>
+    <div class="card-body">
+        <div id="fileTree" class="border p-3 rounded bg-light" style="min-height: 400px;">
+             <p class="text-muted text-center mt-5"><i class="fas fa-spinner fa-spin"></i> 正在加载文件树...</p>
+        </div>
+        <div id="fileInfo" class="mt-2 text-muted small"></div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- jsTree JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const fileTree = $('#fileTree'); // Using jQuery for jsTree
+    const fileInfo = document.getElementById('fileInfo');
+    const clientId = "{{ client.id }}"; // Get from template context
+    const jobId = "{{ job.id }}";       // Get from template context
+    const snapshot = "{{ snapshot }}"; // Get from template context
+
+    // Initialize jsTree
+    fileTree.jstree({
+        'core': {
+            'data': {
+                'url': `{{ url_for('main.browse_files', client_id=client.id) }}`, // Use the same endpoint
+                'data': function (node) {
+                    const relPath = (node.id === '#') ? '/' : (node.data ? node.data.relative_path : '/');
+                    return {
+                        'job_id': jobId,
+                        'snapshot': snapshot,
+                        'path': relPath
+                    };
+                },
+                 'error': function(jqXHR, textStatus, errorThrown) { // Add error handling
+                     console.error("jsTree AJAX Error:", textStatus, errorThrown, jqXHR.responseText);
+                     fileTree.html(`<div class="alert alert-danger">加载文件列表失败: ${errorThrown || textStatus}. ${jqXHR.responseText || ''}</div>`);
+                 }
+            },
+            'themes': { 'responsive': true, 'stripes': true }
+        },
+        'plugins': ['types', 'wholerow'] // Basic plugins
+    }).on('load_node.jstree', function () {
+         fileTree.find('.jstree-loading').remove();
+    }).on('load_error.jstree', function (e, data) { // Add error handling here too
+         console.error("jsTree Load Error Event:", data);
+         fileTree.html(`<div class="alert alert-danger">加载子目录时出错: ${data.error}. ${data.reason || ''}</div>`);
+    }).on('changed.jstree', function (e, data) { // Display file info on selection
+        if (data.selected.length) {
+            const node = data.instance.get_node(data.selected[0]);
+            if (node && node.data) {
+                let infoText = `路径: ${node.data.relative_path || '/'}`;
+                if (!node.data.is_dir && node.data.size !== null) {
+                    infoText += ` | 大小: ${humanFileSize(node.data.size)}`;
+                }
+                if (node.data.modified) {
+                    infoText += ` | 修改时间: ${node.data.modified}`;
+                }
+                fileInfo.textContent = infoText;
+            } else {
+                 fileInfo.textContent = '';
+            }
+        } else {
+            fileInfo.textContent = '';
+        }
+    });
+
+     // --- Helper Function for File Size --- (copy from client_detail.html)
+     function humanFileSize(bytes, si = false, dp = 1) { /* ... same implementation ... */ }
+
+}); // End DOMContentLoaded
+</script>
+{% endblock %}
