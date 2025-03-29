@@ -1,0 +1,682 @@
+{% extends "layout.html" %}
+{% from "_formhelpers.html" import render_field %}
+
+{% block title %}{{ client.name }} - 客户端详情{% endblock %}
+
+{% block head_extra %}
+<!-- jsTree CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" />
+<style>
+    /* Ensure logs have wrapping */
+    .log-message {
+        white-space: pre-wrap; /* Wrap long lines */
+        word-break: break-all; /* Break long words/paths */
+        font-family: monospace;
+        font-size: 0.9em;
+        max-height: 300px; /* Limit height of expanded log */
+        overflow-y: auto;
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        display: none; /* Hidden by default */
+    }
+    .log-entry:hover {
+        background-color: #f1f1f1; /* Subtle hover effect */
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.list_clients') }}">客户端管理</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{ client.name }}</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+     <h1>{{ client.name }} <small class="text-muted">({{ client.hostname or 'N/A' }})</small></h1>
+     {# Add Edit button maybe? #}
+</div>
+
+<!-- Client Info Card -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header"><i class="fas fa-info-circle"></i> 客户端信息</div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>UUID:</strong> <code title="{{ client.uuid }}">{{ client.uuid }}</code></p>
+                <p><strong>操作系统:</strong> {{ client.os_info or 'N/A' }}</p>
+                <p><strong>IP 地址:</strong> {{ client.ip_address or 'N/A' }}</p>
+             </div>
+             <div class="col-md-6">
+                 <p><strong>状态:</strong>
+                    {% if client.status == ClientStatus.ONLINE %}
+                        <span class="badge status-badge status-online">在线</span>
+                    {% elif client.status == ClientStatus.OFFLINE %}
+                        <span class="badge status-badge status-offline">离线</span>
+                    {% elif client.status == ClientStatus.ERROR %}
+                        <span class="badge status-badge status-error">错误</span>
+                    {% else %}
+                        <span class="badge status-badge status-unknown">未知</span>
+                    {% endif %}
+                 </p>
+                <p><strong>上次心跳:</strong> {{ client.last_heartbeat.strftime('%Y-%m-%d %H:%M:%S UTC') if client.last_heartbeat else '从未' }}</p>
+                <p><strong>注册时间:</strong> {{ client.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</p>
+            </div>
+             <div class="col-12 mt-2">
+                 <p><strong>SSH 公钥:</strong></p>
+                 <pre><code style="white-space: pre-wrap; word-break: break-all;">{{ client.ssh_public_key or '未提供' }}</code></pre>
+                  <p class="text-muted small">请确保此公钥已添加到主控服务器上备份用户 (<code>{{ settings.backup_ssh_user }}</code>) 的 <code>authorized_keys</code> 文件中。</p>
+             </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Backup Jobs -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-tasks"></i> 备份任务</span>
+        <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#backupJobModal" data-job-id="">
+            <i class="fas fa-plus"></i> 添加任务
+        </button>
+    </div>
+    <div class="card-body">
+        {% if client.jobs %}
+        <div class="table-responsive">
+            <table class="table table-hover table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>名称</th>
+                        <th>类型</th>
+                        <th>源</th>
+                        <th>计划</th>
+                        <th>启用</th>
+                        <th>上次运行</th>
+                        <th>上次状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in client.jobs | sort(attribute='name') %}
+                    <tr>
+                        <td>{{ job.name }}</td>
+                        <td><span class="badge bg-info">{{ job.job_type.name.title() }}</span></td>
+                        <td>
+                            {% if job.job_type == BackupJobType.DIRECTORY %}
+                            <code>{{ job.source_path }}</code>
+                            {% elif job.job_type in [BackupJobType.MYSQL, BackupJobType.POSTGRESQL] %}
+                            {{ job.db_name }}@{{ job.db_host or 'localhost' }}
+                            {% endif %}
+                        </td>
+                        <td title="{{ job.cron_schedule }}"><code>{{ job.cron_schedule }}</code></td>
+                        <td>
+                            {% if job.enabled %}
+                                <i class="fas fa-check-circle text-success" title="已启用"></i>
+                            {% else %}
+                                <i class="fas fa-times-circle text-danger" title="已禁用"></i>
+                            {% endif %}
+                        </td>
+                         <td>{{ job.last_run.strftime('%Y-%m-%d %H:%M') if job.last_run else '从未' }}</td>
+                         <td>
+                             {% if job.last_status == 'Success' %}
+                                <span class="badge bg-success">成功</span>
+                             {% elif job.last_status == 'Failed' %}
+                                <span class="badge bg-danger">失败</span>
+                             {% elif job.last_status %}
+                                <span class="badge bg-secondary">{{ job.last_status }}</span>
+                             {% else %}
+                                <span class="badge bg-light text-dark">N/A</span>
+                             {% endif %}
+                         </td>
+                        <td>
+                             <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#backupJobModal" data-job-id="{{ job.id }}" title="编辑">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteJobModal" data-job-id="{{ job.id }}" data-job-name="{{ job.name }}" title="删除">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">该客户端还没有配置任何备份任务。</p>
+        {% endif %}
+    </div>
+</div>
+
+
+<!-- File Browser / Restore -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header"><i class="fas fa-folder-open"></i> 文件浏览与恢复</div>
+    <div class="card-body">
+         {% if client.jobs %}
+            <form class="row g-3 align-items-end mb-3" id="fileBrowserForm">
+                 <div class="col-md-4">
+                    <label for="browseJobSelect" class="form-label">选择备份任务:</label>
+                    <select class="form-select" id="browseJobSelect" name="job_id">
+                        <option value="">-- 请选择 --</option>
+                        {% for job in client.jobs | sort(attribute='name') %}
+                        {# Only list jobs that produce browseable backups (dirs, maybe DB dumps later) #}
+                        {# {% if job.job_type == BackupJobType.DIRECTORY %} #}
+                        <option value="{{ job.id }}">{{ job.name }} ({{ job.job_type.name.title() }})</option>
+                        {# {% endif %} #}
+                        {% endfor %}
+                    </select>
+                 </div>
+                 <div class="col-md-4">
+                     <label for="browseSnapshotSelect" class="form-label">选择备份快照:</label>
+                     <select class="form-select" id="browseSnapshotSelect" name="snapshot" disabled>
+                         <option value="">-- 选择任务后加载 --</option>
+                     </select>
+                 </div>
+                 <div class="col-md-2">
+                      <button type="button" id="loadBrowserBtn" class="btn btn-primary w-100" disabled>加载文件</button>
+                 </div>
+                 <div class="col-md-2">
+                     {# Restore button - enable when snapshot selected #}
+                     <button type="button" class="btn btn-warning w-100" id="restoreBtn" data-bs-toggle="modal" data-bs-target="#restoreModal" disabled>
+                         <i class="fas fa-undo"></i> 恢复
+                     </button>
+                 </div>
+            </form>
+            <div id="fileTree" class="border p-3 rounded bg-light" style="min-height: 200px;">
+                <p class="text-muted text-center mt-5">请选择备份任务和快照以浏览文件。</p>
+            </div>
+             <div id="fileInfo" class="mt-2 text-muted small"></div> {# Placeholder for selected file info #}
+         {% else %}
+            <p class="text-muted">请先为此客户端创建备份任务，才能浏览备份文件。</p>
+         {% endif %}
+    </div>
+</div>
+
+
+<!-- Backup Logs -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header"><i class="fas fa-clipboard-list"></i> 备份日志</div>
+    <div class="card-body">
+        {# Add filtering options later? (By Job, Level, Date Range) #}
+        {% if logs %}
+        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+            <table class="table table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th>时间戳 (UTC)</th>
+                        <th>级别</th>
+                        <th>任务</th>
+                        <th>状态</th>
+                        <th>消息摘要</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr class="log-entry" data-log-id="{{ log.id }}" title="点击查看完整消息">
+                        <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td><span class="log-level-{{ log.log_level }}">{{ log.log_level }}</span></td>
+                        <td>{{ log.job.name if log.job else '系统' }}</td>
+                        <td>
+                            {% if log.status == 'Success' %} <span class="badge bg-success">成功</span>
+                            {% elif log.status == 'Failed' %} <span class="badge bg-danger">失败</span>
+                            {% elif log.status %} <span class="badge bg-secondary">{{ log.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ log.message | truncate(100) }}</td>
+                    </tr>
+                    <tr class="log-detail-row" id="log-detail-{{ log.id }}" style="display: none;">
+                        <td colspan="5">
+                             <div class="log-message">{{ log.message }}</div>
+                             <div class="small text-muted mt-1">
+                                 {% if log.duration_seconds is not none %} <span>时长: {{ "%.2f"|format(log.duration_seconds) }}s</span> {% endif %}
+                                 {% if log.size_bytes is not none %} <span class="ms-2">大小: {{ log.size_bytes | human_readable_size }}</span> {% endif %}
+                                 {% if log.backup_snapshot_name %} <span class="ms-2">快照: {{ log.backup_snapshot_name }}</span> {% endif %}
+                             </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {# Add Pagination if needed later #}
+        {% else %}
+        <p class="text-muted">该客户端暂无备份日志。</p>
+        {% endif %}
+    </div>
+</div>
+
+
+<!-- Backup Job Modal (Add/Edit) -->
+<div class="modal fade" id="backupJobModal" tabindex="-1" aria-labelledby="backupJobModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="backupJobForm" method="POST" action=""> {# Action set dynamically #}
+                {{ form.csrf_token }}
+                {{ form.client_id(value=client.id) }} {# Hidden field for client ID #}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="backupJobModalLabel">备份任务</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {# Render form fields using the macro #}
+                    {{ render_field(form.name, class="form-control") }}
+                    {{ render_field(form.job_type, class="form-select") }}
+
+                    <div id="sourcePathGroup" style="display: none;">
+                         {{ render_field(form.source_path, class="form-control", placeholder="例如 /var/www/html 或 /home/user/data/") }}
+                    </div>
+                    <div id="dbGroup" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">{{ render_field(form.db_name, class="form-control", placeholder="数据库名称") }}</div>
+                             <div class="col-md-6">{{ render_field(form.db_user, class="form-control", placeholder="数据库用户名 (可选)") }}</div>
+                        </div>
+                         <div class="row">
+                            <div class="col-md-6">{{ render_field(form.db_password, class="form-control", placeholder="留空表示不更改密码") }}</div>
+                            <div class="col-md-4">{{ render_field(form.db_host, class="form-control") }}</div>
+                             <div class="col-md-2">{{ render_field(form.db_port, class="form-control", placeholder="默认") }}</div>
+                        </div>
+                    </div>
+
+                     {{ render_field(form.target_subdirectory, class="form-control", placeholder="例如 'website_files' 或 'db_backups'") }}
+                     <div class="form-text">相对路径，用于在主控的客户端备份目录下组织此任务的备份。留空将自动生成 (job_&lt;id&gt;)。</div>
+
+                    {{ render_field(form.cron_schedule, class="form-control", placeholder="例如 0 2 * * *") }}
+                     <div class="form-text">使用标准的 5 字段 Cron 格式 (分 时 日 月 周)。 <a href="https://crontab.guru/" target="_blank" rel="noopener">Crontab.guru</a> 可帮助生成。</div>
+
+                    <div class="row">
+                         <div class="col-md-6">{{ render_field(form.bandwidth_limit_kbps, class="form-control") }}</div>
+                         <div class="col-md-6">{{ render_field(form.retention_days, class="form-control") }}</div>
+                    </div>
+
+                     {{ render_field(form.rsync_options, class="form-control", placeholder="例如 --exclude='*.log' --exclude='/temp'") }}
+
+                    {{ render_field(form.pre_backup_script, class="form-control", rows="3", placeholder="将在备份开始前在客户端执行的 Shell 命令") }}
+                    {{ render_field(form.post_backup_script, class="form-control", rows="3", placeholder="将在备份结束后在客户端执行的 Shell 命令") }}
+
+                    {{ render_field(form.enabled, class="form-check-input") }}
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary" id="saveJobBtn">保存任务</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Job Confirmation Modal -->
+<div class="modal fade" id="deleteJobModal" tabindex="-1" aria-labelledby="deleteJobModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteJobModalLabel">确认删除任务</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                您确定要删除备份任务 <strong id="deleteJobName"></strong> 吗？
+                <p class="text-danger mt-2"><i class="fas fa-exclamation-triangle"></i> 此操作将同时删除该任务的所有备份日志记录，但 **不会** 删除已存储在服务器上的备份文件。</p>
+            </div>
+            <div class="modal-footer">
+                 <form id="deleteJobForm" method="POST" action="">
+                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                     <button type="submit" class="btn btn-danger">确认删除</button>
+                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Restore Modal -->
+<div class="modal fade" id="restoreModal" tabindex="-1" aria-labelledby="restoreModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+             <form id="restoreForm" method="POST" action="{{ url_for('main.restore_files', client_id=client.id) }}">
+                 {{ restore_form.csrf_token }}
+                 {{ restore_form.client_id(value=client.id) }}
+                 {{ restore_form.job_id(id='restore_job_id') }} {# Populated by JS #}
+                 {{ restore_form.snapshot(id='restore_snapshot_id') }} {# Populated by JS #}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="restoreModalLabel">恢复文件</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>将从以下备份恢复:</p>
+                    <ul class="list-unstyled">
+                        <li><strong>任务:</strong> <span id="restoreJobName"></span></li>
+                        <li><strong>快照:</strong> <code id="restoreSnapshotName"></code></li>
+                    </ul>
+                    <hr>
+                    {# Render restore form fields #}
+                    {{ render_field(restore_form.target_path, class="form-control", placeholder="客户端上的绝对路径，例如 /tmp/restore_here/") }}
+                    <div class="form-text text-danger"><strong>警告:</strong> 恢复操作将使用 Rsync 将备份文件写入目标路径。如果目标路径已存在同名文件，**现有文件将被覆盖**。请确保目标路径正确无误！</div>
+
+                    {# Add selection of items later if needed #}
+                    {# {{ render_field(restore_form.source_items, class="form-control", rows="5") }} #}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-warning">确认并开始恢复</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+{% block scripts %}
+<!-- jsTree JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const backupJobModal = document.getElementById('backupJobModal');
+    const backupJobForm = document.getElementById('backupJobForm');
+    const jobTypeSelect = document.getElementById('job_type'); // Assuming WTForms generates this ID
+    const sourcePathGroup = document.getElementById('sourcePathGroup');
+    const dbGroup = document.getElementById('dbGroup');
+    const modalLabel = document.getElementById('backupJobModalLabel');
+
+    // --- Backup Job Modal Logic (Add/Edit) ---
+    function toggleJobFields() {
+        const selectedType = jobTypeSelect.value;
+        sourcePathGroup.style.display = (selectedType === '{{ BackupJobType.DIRECTORY.value }}') ? 'block' : 'none';
+        dbGroup.style.display = (selectedType === '{{ BackupJobType.MYSQL.value }}' || selectedType === '{{ BackupJobType.POSTGRESQL.value }}') ? 'block' : 'none';
+
+        // Make fields required/optional based on type (simple client-side indication)
+        // Actual validation is server-side
+        document.getElementById('source_path').required = (selectedType === '{{ BackupJobType.DIRECTORY.value }}');
+        document.getElementById('db_name').required = (selectedType === '{{ BackupJobType.MYSQL.value }}' || selectedType === '{{ BackupJobType.POSTGRESQL.value }}');
+        // User/Pass are optional in the form itself (only required if setting new)
+    }
+
+    jobTypeSelect.addEventListener('change', toggleJobFields);
+
+    backupJobModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const jobId = button.getAttribute('data-job-id');
+        const form = document.getElementById('backupJobForm'); // Get the form element
+
+        if (jobId && jobId !== "") { // Editing existing job
+            modalLabel.textContent = '编辑备份任务';
+            form.action = "{{ url_for('main.edit_backup_job', client_id=client.id, job_id=0) }}".replace('0', jobId);
+
+            // Fetch job data and populate the form
+            fetch("{{ url_for('main.get_backup_job_data', job_id=0) }}".replace('0', jobId))
+            .then(response => {
+                 if (!response.ok) { throw new Error('Network response was not ok'); }
+                 return response.json();
+                })
+            .then(data => {
+                // Populate form fields dynamically
+                form.elements['name'].value = data.name || '';
+                form.elements['job_type'].value = data.job_type || '';
+                form.elements['source_path'].value = data.source_path || '';
+                form.elements['db_name'].value = data.db_name || '';
+                form.elements['db_user'].value = data.db_user || '';
+                // Don't populate password field - only for changing
+                form.elements['db_password'].value = '';
+                form.elements['db_password'].placeholder = '(保持不变)'; // Change placeholder
+                form.elements['db_host'].value = data.db_host || 'localhost';
+                form.elements['db_port'].value = data.db_port || '';
+                form.elements['target_subdirectory'].value = data.target_subdirectory || '';
+                form.elements['cron_schedule'].value = data.cron_schedule || '0 2 * * *';
+                form.elements['bandwidth_limit_kbps'].value = data.bandwidth_limit_kbps || 0;
+                form.elements['rsync_options'].value = data.rsync_options || '';
+                form.elements['pre_backup_script'].value = data.pre_backup_script || '';
+                form.elements['post_backup_script'].value = data.post_backup_script || '';
+                form.elements['enabled'].checked = data.enabled === true;
+                form.elements['retention_days'].value = data.retention_days !== null ? data.retention_days : 0; // Handle null
+
+                toggleJobFields(); // Show/hide fields based on loaded type
+            })
+            .catch(error => {
+                console.error('Error fetching job data:', error);
+                alert('无法加载任务数据，请重试。');
+                // Optionally close modal or reset form
+            });
+
+        } else { // Adding new job
+            modalLabel.textContent = '添加备份任务';
+            form.action = "{{ url_for('main.add_backup_job', client_id=client.id) }}";
+            form.reset(); // Clear the form
+             form.elements['client_id'].value = "{{ client.id }}"; // Ensure client_id is set
+            form.elements['db_password'].placeholder = '数据库密码 (可选)'; // Reset placeholder
+            toggleJobFields(); // Ensure correct fields are shown for default type
+        }
+    });
+
+     // Clear form on modal close to prevent state issues
+    backupJobModal.addEventListener('hidden.bs.modal', function (event) {
+        document.getElementById('backupJobForm').reset();
+         document.getElementById('db_password').placeholder = '数据库密码 (可选)';
+         toggleJobFields(); // Reset field visibility
+    });
+
+
+    // --- Delete Job Modal Logic ---
+    const deleteJobModal = document.getElementById('deleteJobModal');
+    if (deleteJobModal) {
+        deleteJobModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const jobId = button.getAttribute('data-job-id');
+            const jobName = button.getAttribute('data-job-name');
+
+            const modalTitle = deleteJobModal.querySelector('.modal-title');
+            const modalBodyName = deleteJobModal.querySelector('#deleteJobName');
+            const deleteForm = deleteJobModal.querySelector('#deleteJobForm');
+
+            modalTitle.textContent = '确认删除任务: ' + jobName;
+            modalBodyName.textContent = jobName;
+            deleteForm.action = "{{ url_for('main.delete_backup_job', job_id=0) }}".replace('0', jobId);
+        });
+    }
+
+     // --- Log Detail Toggle ---
+     document.querySelectorAll('.log-entry').forEach(row => {
+        row.addEventListener('click', function() {
+            const logId = this.getAttribute('data-log-id');
+            const detailRow = document.getElementById(`log-detail-${logId}`);
+            if (detailRow) {
+                detailRow.style.display = (detailRow.style.display === 'none' || detailRow.style.display === '') ? 'table-row' : 'none';
+            }
+        });
+    });
+
+
+    // --- File Browser Logic ---
+    const jobSelect = document.getElementById('browseJobSelect');
+    const snapshotSelect = document.getElementById('browseSnapshotSelect');
+    const loadBtn = document.getElementById('loadBrowserBtn');
+    const fileTree = $('#fileTree'); // Using jQuery for jsTree
+    const fileInfo = document.getElementById('fileInfo');
+    const restoreBtn = document.getElementById('restoreBtn');
+
+
+    jobSelect.addEventListener('change', function() {
+        const jobId = this.value;
+        snapshotSelect.innerHTML = '<option value="">正在加载...</option>';
+        snapshotSelect.disabled = true;
+        loadBtn.disabled = true;
+        restoreBtn.disabled = true;
+        fileTree.html('<p class="text-muted text-center mt-5">请选择备份快照。</p>'); // Reset tree
+        fileInfo.textContent = '';
+
+
+        if (!jobId) {
+            snapshotSelect.innerHTML = '<option value="">-- 选择任务后加载 --</option>';
+            return;
+        }
+
+        // Fetch snapshots for the selected job
+        fetch(`{{ url_for('main.get_job_snapshots', job_id=0) }}`.replace('0', jobId))
+            .then(response => response.json())
+            .then(data => {
+                snapshotSelect.innerHTML = '<option value="">-- 请选择快照 --</option>';
+                if (data.snapshots && data.snapshots.length > 0) {
+                    // Add 'latest' option if available and relevant (e.g., for directory backups)
+                     if (data.has_latest) {
+                         snapshotSelect.innerHTML += `<option value="latest">最新备份 (latest)</option>`;
+                     }
+                     // Add timestamped snapshots
+                    data.snapshots.forEach(snapshot => {
+                        // Assume snapshot is just the name (e.g., timestamp)
+                         snapshotSelect.innerHTML += `<option value="${snapshot}">${snapshot}</option>`;
+                    });
+                    snapshotSelect.disabled = false;
+                 } else if (data.error) {
+                     snapshotSelect.innerHTML = `<option value="">错误: ${data.error}</option>`;
+                 } else {
+                    snapshotSelect.innerHTML = '<option value="">无可用快照</option>';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching snapshots:', error);
+                 snapshotSelect.innerHTML = '<option value="">加载快照失败</option>';
+            });
+    });
+
+    snapshotSelect.addEventListener('change', function() {
+         const snapshotSelected = this.value !== "";
+         loadBtn.disabled = !snapshotSelected;
+         restoreBtn.disabled = !snapshotSelected; // Enable restore button when snapshot is selected
+         fileTree.html('<p class="text-muted text-center mt-5">请点击 "加载文件"。</p>');
+         fileInfo.textContent = '';
+    });
+
+    loadBtn.addEventListener('click', function() {
+        const jobId = jobSelect.value;
+        const snapshot = snapshotSelect.value;
+
+        if (!jobId || !snapshot) {
+            alert('请先选择备份任务和快照。');
+            return;
+        }
+
+        fileTree.html('<p class="text-muted text-center mt-5"><i class="fas fa-spinner fa-spin"></i> 正在加载文件树...</p>');
+        fileInfo.textContent = '';
+        loadBtn.disabled = true; // Disable while loading
+
+
+        // Destroy previous instance if exists
+        if (fileTree.jstree(true)) {
+             fileTree.jstree('destroy');
+        }
+
+        // Initialize jsTree
+        fileTree.jstree({
+            'core': {
+                'data': {
+                    'url': `{{ url_for('main.browse_files', client_id=client.id) }}`,
+                    'data': function (node) {
+                        // node.id is '#' for the root, otherwise it's the relative path_id we set
+                        const relPath = (node.id === '#') ? '/' : (node.data ? node.data.relative_path : '/');
+                        return {
+                            'job_id': jobId,
+                            'snapshot': snapshot,
+                             'path': relPath // Send relative path to backend
+                        };
+                    },
+                     'error': function(jqXHR, textStatus, errorThrown) {
+                         console.error("jsTree AJAX Error:", textStatus, errorThrown, jqXHR.responseText);
+                         fileTree.html(`<div class="alert alert-danger">加载文件列表失败: ${errorThrown || textStatus}. ${jqXHR.responseText || ''}</div>`);
+                         loadBtn.disabled = false; // Re-enable button on error
+                     }
+                },
+                 'check_callback': true, // Allows creating/renaming/deleting if implemented
+                 'themes': {
+                    'responsive': true,
+                     'stripes': true
+                }
+            },
+             // Add plugins if needed (e.g., search, contextmenu)
+             // 'plugins': ['search', 'types', 'wholerow']
+             'plugins': ['types', 'wholerow']
+        }).on('load_node.jstree', function () {
+            loadBtn.disabled = false; // Re-enable after loading root
+             fileTree.find('.jstree-loading').remove(); // Ensure loading indicators are removed
+        }).on('load_error.jstree', function (e, data) {
+             console.error("jsTree Load Error Event:", data);
+             fileTree.html(`<div class="alert alert-danger">加载子目录时出错: ${data.error}. ${data.reason || ''}</div>`);
+             loadBtn.disabled = false;
+        }).on('changed.jstree', function (e, data) {
+             if (data.selected.length) {
+                 const node = data.instance.get_node(data.selected[0]);
+                 if (node && node.data) {
+                    let infoText = `路径: ${node.data.relative_path || '/'}`;
+                    if (!node.data.is_dir && node.data.size !== null) {
+                        infoText += ` | 大小: ${humanFileSize(node.data.size)}`; // Need humanFileSize JS function
+                    }
+                     if (node.data.modified) {
+                        infoText += ` | 修改时间: ${node.data.modified}`;
+                    }
+                     fileInfo.textContent = infoText;
+                 } else {
+                      fileInfo.textContent = '';
+                 }
+             } else {
+                 fileInfo.textContent = '';
+             }
+         });
+    });
+
+
+    // --- Restore Modal Logic ---
+    const restoreModal = document.getElementById('restoreModal');
+    if (restoreModal) {
+        restoreModal.addEventListener('show.bs.modal', function (event) {
+            const selectedJobId = jobSelect.value;
+            const selectedSnapshot = snapshotSelect.value;
+            const selectedJobOption = jobSelect.options[jobSelect.selectedIndex];
+            const selectedJobName = selectedJobOption ? selectedJobOption.text : 'N/A';
+
+            if (!selectedJobId || !selectedSnapshot) {
+                alert('请先在文件浏览器部分选择有效的任务和快照。');
+                event.preventDefault(); // Prevent modal from showing
+                return;
+            }
+
+            // Populate hidden fields and display info in the modal
+            document.getElementById('restore_job_id').value = selectedJobId;
+             document.getElementById('restore_snapshot_id').value = selectedSnapshot; // Set hidden field value
+            document.getElementById('restoreJobName').textContent = selectedJobName;
+             document.getElementById('restoreSnapshotName').textContent = selectedSnapshot; // Set display text
+
+             // Optionally clear the target path input
+             const targetPathInput = restoreModal.querySelector('#target_path');
+             if (targetPathInput) {
+                targetPathInput.value = '';
+             }
+        });
+    }
+
+
+     // --- Helper Function for File Size ---
+     function humanFileSize(bytes, si = false, dp = 1) {
+        const thresh = si ? 1000 : 1024;
+        if (Math.abs(bytes) < thresh) {
+            return bytes + ' B';
+        }
+        const units = si
+            ? ['kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
+            : ['KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
+        let u = -1;
+        const r = 10 ** dp;
+        do {
+            bytes /= thresh;
+            ++u;
+        } while (Math.round(Math.abs(bytes) * r) / r >= thresh && u < units.length - 1);
+        return bytes.toFixed(dp) + ' ' + units[u];
+    }
+
+
+}); // End DOMContentLoaded
+</script>
+{% endblock %}
