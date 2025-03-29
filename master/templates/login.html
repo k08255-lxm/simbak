@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% from "_formhelpers.html" import render_field, render_submit_field %} {# Import the macros #}
+
+{% block title %}登录 - Simbak{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6 col-lg-4">
+        {# Display flash messages specifically for login page if needed #}
+
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h2 class="card-title text-center mb-4">管理员登录</h2>
+                {# Check if admin exists (passed from route) to show setup link #}
+                {% if not admin_exists %}
+                 <div class="alert alert-info text-center small">
+                     系统尚未初始化。 <a href="{{ url_for('auth.setup') }}">点击这里进行首次设置</a>。
+                 </div>
+                {% endif %}
+
+                {# Login Form #}
+                <form method="POST" action="{{ url_for('auth.login', next=request.args.get('next')) }}" novalidate> {# Add novalidate to rely on server-side validation #}
+                    {{ form.csrf_token }} {# CSRF token #}
+
+                    {# Render username field using macro #}
+                    {{ render_field(form.username, class="form-control", placeholder="用户名", autofocus=true, autocomplete="username") }}
+
+                    {# Render password field using macro #}
+                    {{ render_field(form.password, class="form-control", placeholder="密码", autocomplete="current-password") }}
+
+                    {# Optional: Remember Me Checkbox #}
+                    {# {{ render_field(form.remember_me, class="form-check-input") }} #}
+
+                    {# Render submit button using macro #}
+                    <div class="d-grid mt-4">
+                        {{ render_submit_field(form.submit, class="btn btn-primary btn-block") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
