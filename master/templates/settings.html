@@ -1,0 +1,68 @@
+{% extends "layout.html" %}
+{% from "_formhelpers.html" import render_field %}
+
+{% block title %}系统设置 - Simbak{% endblock %}
+
+{% block content %}
+<h1>系统设置</h1>
+<p class="text-muted">管理 Simbak 的全局配置。</p>
+
+<div class="card shadow-sm">
+     <div class="card-body">
+        <form method="POST" action="{{ url_for('main.settings') }}">
+            {{ form.csrf_token }}
+
+            <fieldset class="mb-4">
+                <legend class="h5 border-bottom pb-2 mb-3">备份存储</legend>
+                {{ render_field(form.backup_base_path, class="form-control") }}
+                <div class="form-text">存储所有备份的根目录。更改此设置**不会**移动现有备份。确保此路径存在且 Web 服务器/备份用户具有写入权限。</div>
+                {{ render_field(form.backup_ssh_user, class="form-control") }}
+                 <div class="form-text">客户端用于通过 SSH 传输备份的用户名。必须确保此用户存在于主控服务器上，并且具有对备份根路径的写入权限及其 `~/.ssh/authorized_keys` 文件的管理权限。</div>
+                {{ render_field(form.default_retention_days, class="form-control", type="number", min="0") }}
+                <div class="form-text">默认情况下，备份快照保留的天数。设置为 0 表示永久保留（除非被任务特定设置覆盖）。后台任务会定期清理过期快照。</div>
+            </fieldset>
+
+            <fieldset class="mb-4">
+                 <legend class="h5 border-bottom pb-2 mb-3">通知设置</legend>
+                 {{ render_field(form.notification_email, class="form-control", placeholder="接收通知的邮箱地址") }}
+                 {{ render_field(form.notification_webhook_url, class="form-control", placeholder="接收通知的 Webhook URL") }}
+                 <div class="form-text">当备份失败、客户端离线等事件发生时，系统将发送通知到配置的邮箱或 Webhook 地址。</div>
+            </fieldset>
+
+            <fieldset class="mb-4">
+                <legend class="h5 border-bottom pb-2 mb-3">SMTP 设置 (用于邮件通知)</legend>
+                <div class="row">
+                    <div class="col-md-8">{{ render_field(form.smtp_host, class="form-control", placeholder="例如 smtp.example.com") }}</div>
+                    <div class="col-md-4">{{ render_field(form.smtp_port, class="form-control", type="number", placeholder="例如 587") }}</div>
+                </div>
+                 <div class="row">
+                    <div class="col-md-6">{{ render_field(form.smtp_username, class="form-control", placeholder="SMTP 登录用户名") }}</div>
+                    <div class="col-md-6">{{ render_field(form.smtp_password, class="form-control", placeholder="留空表示不更改密码") }}</div>
+                 </div>
+                 <div class="mt-2">
+                    {{ render_field(form.smtp_use_tls, class="form-check-input") }}
+                    <label class="form-check-label" for="smtp_use_tls">使用 TLS 加密</label>
+                 </div>
+                 <div class="form-text">如果需要邮件通知，请配置 SMTP 服务器信息。密码将被加密存储。</div>
+            </fieldset>
+
+
+            <div class="d-grid">
+                {{ form.submit(class="btn btn-primary") }}
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<div class="card shadow-sm mt-4">
+    <div class="card-header">安全</div>
+     <div class="card-body">
+         <a href="{{ url_for('main.change_password') }}" class="btn btn-outline-warning">
+             <i class="fas fa-key"></i> 更改管理员密码
+         </a>
+    </div>
+</div>
+
+
+{% endblock %}
