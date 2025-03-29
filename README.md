@@ -68,7 +68,7 @@ Simbak (Simple Backup) 是一个轻量级、易于部署和使用的客户端/�
     *   下载安装脚本并执行 (需要 `sudo` 或 `root` 权限):
         ```bash
         curl -sSL https://raw.githubusercontent.com/k08255-lxm/simbak/main/install.sh -o simbak_install.sh
-        sudo bash simbak_install.sh --mode master [--install-dir /opt/simbak] [--yes]
+        sudo bash simbak_install.sh --mode master --install-dir /opt/simbak --yes
         ```
         
         *   `--install-dir`: 可选，指定安装路径 (默认 `/opt/simbak`)。
