@@ -1,0 +1,4 @@
+requests>=2.25
+croniter>=1.0
+python-dotenv>=0.19 # Optional, if client uses .env
+cryptography>=3.4 # If client needs to decrypt anything (e.g., DB passwords fetched from master)
