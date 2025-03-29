@@ -1,0 +1,115 @@
+{% extends "layout.html" %}
+
+{% block title %}系统日志 - Simbak{% endblock %}
+
+{% block head_extra %}
+<style>
+    .log-message { /* Same style as in client_detail */
+        white-space: pre-wrap; word-break: break-all; font-family: monospace;
+        font-size: 0.9em; max-height: 300px; overflow-y: auto;
+        background-color: #f8f9fa; padding: 10px; border-radius: 4px;
+        display: none;
+    }
+    .log-entry:hover { background-color: #f1f1f1; cursor: pointer; }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<h1>系统日志</h1>
+<p class="text-muted">查看所有客户端和任务的备份日志记录。</p>
+
+{# Add Filtering Form Here Later #}
+
+{% if logs %}
+<div class="table-responsive shadow-sm rounded mb-3">
+    <table class="table table-sm table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>时间戳 (UTC)</th>
+                <th>客户端</th>
+                <th>任务</th>
+                <th>级别</th>
+                <th>状态</th>
+                <th>消息摘要</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr class="log-entry" data-log-id="{{ log.id }}" title="点击查看完整消息">
+                <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                 <td>{{ log.client.name if log.client else 'N/A' }}</td>
+                <td>{{ log.job.name if log.job else '系统' }}</td>
+                <td><span class="log-level-{{ log.log_level }}">{{ log.log_level }}</span></td>
+                <td>
+                    {% if log.status == 'Success' %} <span class="badge bg-success">成功</span>
+                    {% elif log.status == 'Failed' %} <span class="badge bg-danger">失败</span>
+                    {% elif log.status %} <span class="badge bg-secondary">{{ log.status }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ log.message | truncate(100) }}</td>
+            </tr>
+            <tr class="log-detail-row" id="log-detail-{{ log.id }}" style="display: none;">
+                <td colspan="6"> {# Span all columns #}
+                     <div class="log-message">{{ log.message }}</div>
+                     <div class="small text-muted mt-1">
+                         {% if log.duration_seconds is not none %} <span>时长: {{ "%.2f"|format(log.duration_seconds) }}s</span> {% endif %}
+                         {% if log.size_bytes is not none %} <span class="ms-2">大小: {{ log.size_bytes | human_readable_size }}</span> {% endif %}
+                         {% if log.backup_snapshot_name %} <span class="ms-2">快照/文件: {{ log.backup_snapshot_name }}</span> {% endif %}
+                     </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if pagination and pagination.pages > 1 %}
+<nav aria-label="Log pagination">
+    <ul class="pagination justify-content-center">
+        {# Previous Page Link #}
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('main.view_logs', page=pagination.prev_num) }}{% for key, value in request.args.items() if key != 'page' %}&{{ key }}={{ value }}{% endfor %}">«</a>
+        </li>
+        {# Page Numbers #}
+        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if page_num %}
+                <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('main.view_logs', page=page_num) }}{% for key, value in request.args.items() if key != 'page' %}&{{ key }}={{ value }}{% endfor %}">{{ page_num }}</a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+        {% endfor %}
+        {# Next Page Link #}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+             <a class="page-link" href="{{ url_for('main.view_logs', page=pagination.next_num) }}{% for key, value in request.args.items() if key != 'page' %}&{{ key }}={{ value }}{% endfor %}">»</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+
+
+{% else %}
+<div class="alert alert-info">系统中还没有任何日志记录。</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // --- Log Detail Toggle --- (Same as in client_detail.html)
+    document.querySelectorAll('.log-entry').forEach(row => {
+        row.addEventListener('click', function() {
+            const logId = this.getAttribute('data-log-id');
+            const detailRow = document.getElementById(`log-detail-${logId}`);
+            if (detailRow) {
+                detailRow.style.display = (detailRow.style.display === 'none' || detailRow.style.display === '') ? 'table-row' : 'none';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
