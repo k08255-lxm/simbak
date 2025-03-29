@@ -1,0 +1,92 @@
+/* master/static/css/style.css */
+
+body {
+    padding-top: 56px; /* Adjust based on navbar height */
+    padding-bottom: 60px; /* Add padding for the footer */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main.container {
+    flex: 1; /* Make the main content area grow to fill available space */
+}
+
+
+.footer {
+    padding: 1rem 0;
+    margin-top: auto; /* Push footer to the bottom */
+    text-align: center;
+    font-size: 0.9em;
+    color: #6c757d; /* Bootstrap muted color */
+    border-top: 1px solid #dee2e6; /* Bootstrap border color */
+}
+
+/* Make table headers slightly bolder */
+thead th {
+    font-weight: 600;
+}
+
+/* Style for log levels in tables/lists */
+.log-level-DEBUG { color: #6c757d; }
+.log-level-INFO { color: #0dcaf0; }
+.log-level-WARNING { color: #ffc107; }
+.log-level-ERROR { color: #dc3545; }
+.log-level-CRITICAL { color: #dc3545; font-weight: bold; }
+
+
+/* Improve card header visuals slightly */
+.card-header {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    font-weight: 500;
+}
+
+/* Add some spacing to table cells */
+.table td, .table th {
+    vertical-align: middle;
+}
+
+/* Style for jsTree (if used) */
+.jstree-default .jstree-anchor {
+    line-height: 24px;
+    height: 24px;
+}
+.jstree-default .jstree-themeicon {
+    margin-right: 5px;
+}
+
+/* Highlight background for code/pre tags */
+pre, code {
+    background-color: #f8f9fa; /* Light grey background */
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 85%;
+}
+pre {
+    padding: 1em;
+    overflow-x: auto; /* Allow horizontal scrolling for long lines */
+}
+
+/* Style for client status badges (redundant if using bg-* classes directly, but can customize here) */
+.status-badge {
+    font-size: 0.85em;
+    padding: 0.3em 0.6em;
+}
+.status-online { background-color: #198754; color: white; } /* Bootstrap success */
+.status-offline { background-color: #dc3545; color: white; } /* Bootstrap danger */
+.status-error { background-color: #ffc107; color: black; } /* Bootstrap warning */
+.status-unknown { background-color: #6c757d; color: white; } /* Bootstrap secondary */
+
+/* Improve form spacing slightly */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+/* Adjustments for smaller screens if needed */
+@media (max-width: 768px) {
+    body {
+        padding-top: 56px; /* Adjust if navbar height changes */
+    }
+}
