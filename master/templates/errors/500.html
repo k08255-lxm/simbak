@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+
+{% block title %}500 - 服务器错误{% endblock %}
+
+{% block content %}
+<div class="text-center mt-5">
+    <h1 class="display-1">500</h1>
+    <h2>服务器内部错误</h2>
+    <p class="lead">{{ message or '抱歉，处理您的请求时发生了一个内部错误。' }}</p>
+     <p class="text-muted">我们已经记录了此错误，并将尽快调查。</p>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary mt-3">返回仪表盘</a>
+</div>
+{% endblock %}
